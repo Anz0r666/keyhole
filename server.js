@@ -208,15 +208,21 @@ const server = http.createServer((req, res) => {
 process.on('uncaughtException', (err) => console.error('  ⚠️ uncaughtException:', err && err.message));
 process.on('unhandledRejection', (err) => console.error('  ⚠️ unhandledRejection:', err && (err.message || err)));
 
-const restored = load();
-const apiKey = ensureApiKey();
-server.listen(PORT, () => {
-  console.log(`\n  🔑 Keyhole [ТЕСТОВЫЙ режим] запущен`);
-  console.log(`  → Дашборд:     http://localhost:${PORT}`);
-  console.log(`  → Презентация: http://localhost:${PORT}/deck`);
-  console.log(`  → Health:      http://localhost:${PORT}/health`);
-  console.log(`  → Рельсы:      ${getRails().name}`);
-  console.log(`  → Состояние:   ${restored ? 'восстановлено с диска' : 'чистое'}`);
-  console.log(`  → API-ключ:    ${apiKey}`);
-  console.log(`  Защита: валидация · auth · rate-limit · заголовки · устойчивость.\n`);
-});
+// Локальный запуск (node server.js). На Vercel этот блок не выполняется —
+// там точка входа api/index.js сама делает hydrate → handle → flush.
+if (require.main === module) {
+  const restored = load();
+  const apiKey = ensureApiKey();
+  server.listen(PORT, () => {
+    console.log(`\n  🔑 Keyhole [ТЕСТОВЫЙ режим] запущен`);
+    console.log(`  → Дашборд:     http://localhost:${PORT}`);
+    console.log(`  → Презентация: http://localhost:${PORT}/deck`);
+    console.log(`  → Health:      http://localhost:${PORT}/health`);
+    console.log(`  → Рельсы:      ${getRails().name}`);
+    console.log(`  → Состояние:   ${restored ? 'восстановлено с диска' : 'чистое'}`);
+    console.log(`  → API-ключ:    ${apiKey}`);
+    console.log(`  Защита: валидация · auth · rate-limit · заголовки · устойчивость.\n`);
+  });
+}
+
+module.exports = { handle, runScenario, server };
