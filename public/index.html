@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Keyhole · Консоль агентных платежей</title>
+<style>
+  :root {
+    --bg: #0e0b1f; --bg2: #16122e; --card: #1c1740; --line: #2c2558;
+    --text: #e8e6f5; --muted: #9a93c4; --accent: #8b7cff; --accent2: #c4b5ff;
+    --ok: #3ddc97; --deny: #ff6b8a; --wait: #ffce5a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: radial-gradient(1200px 600px at 20% -10%, #2a1f5e 0%, var(--bg) 55%);
+    color: var(--text); min-height: 100vh; padding: 28px;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  header { display: flex; align-items: center; gap: 14px; margin-bottom: 6px; }
+  .logo { width: 40px; height: 40px; border-radius: 11px;
+    background: linear-gradient(135deg, var(--accent), #5b46d6);
+    display: grid; place-items: center; font-size: 22px;
+    box-shadow: 0 8px 30px rgba(139,124,255,.4); }
+  h1 { font-size: 22px; margin: 0; letter-spacing: .3px; }
+  .badge { font-size: 11px; color: var(--wait); border: 1px solid var(--wait);
+    padding: 2px 8px; border-radius: 20px; margin-left: 6px; vertical-align: middle; }
+  .sub { color: var(--muted); font-size: 13px; margin: 2px 0 22px 54px; }
+  .controls { display: flex; gap: 10px; margin-bottom: 22px; flex-wrap: wrap; }
+  button { cursor: pointer; border: none; border-radius: 11px; padding: 11px 18px;
+    font-size: 14px; font-weight: 600; color: #fff; transition: transform .08s, filter .2s; }
+  button:active { transform: translateY(1px); }
+  .primary { background: linear-gradient(135deg, var(--accent), #5b46d6);
+    box-shadow: 0 6px 20px rgba(139,124,255,.35); }
+  .ghost { background: var(--card); color: var(--accent2); border: 1px solid var(--line); }
+  button:hover { filter: brightness(1.08); }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 820px) { .grid { grid-template-columns: 1fr; } }
+  .card { background: linear-gradient(180deg, var(--card), var(--bg2));
+    border: 1px solid var(--line); border-radius: 16px; padding: 18px; margin-bottom: 18px; }
+  .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--muted); margin: 0 0 14px; }
+  .agent { display: flex; justify-content: space-between; align-items: center;
+    padding: 12px; border-radius: 11px; background: rgba(255,255,255,.03);
+    border: 1px solid var(--line); margin-bottom: 10px; }
+  .agent .name { font-weight: 600; }
+  .agent .meta { font-size: 11px; color: var(--muted); font-family: monospace; }
+  .rep { font-size: 12px; padding: 3px 9px; border-radius: 20px;
+    background: rgba(61,220,151,.13); color: var(--ok); }
+  .bal { font-size: 13px; color: var(--accent2); }
+  .row { display: flex; gap: 10px; align-items: flex-start; padding: 10px 0;
+    border-bottom: 1px solid var(--line); font-size: 13px; }
+  .row:last-child { border-bottom: none; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; flex: none; }
+  .approved .dot { background: var(--ok); } .denied .dot { background: var(--deny); }
+  .pending .dot { background: var(--wait); }
+  .row .amt { font-weight: 700; min-width: 52px; }
+  .row .reason { color: var(--muted); font-size: 12px; }
+  .tag { font-size: 10px; text-transform: uppercase; letter-spacing: .5px;
+    padding: 1px 7px; border-radius: 6px; margin-left: auto; align-self: center; }
+  .approved .tag { background: rgba(61,220,151,.15); color: var(--ok); }
+  .denied .tag { background: rgba(255,107,138,.15); color: var(--deny); }
+  .pending .tag { background: rgba(255,206,90,.15); color: var(--wait); }
+  .empty { color: var(--muted); font-size: 13px; padding: 18px 0; text-align: center; }
+  .approve-btn { background: var(--wait); color: #2a1f00; padding: 5px 12px;
+    font-size: 12px; border-radius: 8px; margin-left: auto; }
+  .gates { display: flex; gap: 8px; margin: 0 0 22px 54px; flex-wrap: wrap; }
+  .gate { font-size: 11px; color: var(--muted); background: var(--card);
+    border: 1px solid var(--line); border-radius: 20px; padding: 4px 11px; }
+  .full { grid-column: 1 / -1; }
+  /* Формы конструктора */
+  label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
+  input, select { width: 100%; padding: 9px 11px; border-radius: 9px; font-size: 13px;
+    background: rgba(255,255,255,.04); border: 1px solid var(--line); color: var(--text); }
+  input:focus, select:focus { outline: none; border-color: var(--accent); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .formbtn { width: 100%; margin-top: 14px; }
+  .toast { font-size: 12px; margin-top: 10px; min-height: 16px; }
+  .toast.ok { color: var(--ok); } .toast.bad { color: var(--deny); } .toast.wait { color: var(--wait); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">🔑</div>
+    <h1>Keyhole <span class="badge">ТЕСТОВЫЙ РЕЖИМ</span></h1>
+  </header>
+  <div class="sub">Платёжный + идентификационный слой с программируемыми правилами для автономных ИИ-агентов</div>
+  <div class="gates">
+    <span class="gate">🪪 Личность (подпись)</span>
+    <span class="gate">🎛️ Правила</span>
+    <span class="gate">👤 Подтверждение</span>
+    <span class="gate">🤝 Доверие агент↔агент</span>
+  </div>
+
+  <div class="controls">
+    <button class="primary" onclick="runScenario()">▶ Запустить демо-сценарий</button>
+    <button class="ghost" onclick="resetAll()">↺ Сброс</button>
+  </div>
+
+  <!-- ============ КОНСТРУКТОР ============ -->
+  <div class="grid">
+    <div class="card">
+      <h2>🛠️ Создать своего агента</h2>
+      <label>Имя агента</label>
+      <input id="a_name" placeholder="MyAgent" value="MyAgent" />
+      <div class="two">
+        <div><label>Баланс ($)</label><input id="a_balance" type="number" value="500" /></div>
+        <div><label>Дневной лимит ($)</label><input id="a_limit" type="number" value="200" /></div>
+      </div>
+      <label>Порог авто-подтверждения ($) — выше требует человека</label>
+      <input id="a_threshold" type="number" value="50" />
+      <label>Разрешённые категории (через запятую)</label>
+      <input id="a_allow" value="cloud, saas, data, api" />
+      <label>Запрещённые категории</label>
+      <input id="a_block" value="gambling" />
+      <button class="primary formbtn" onclick="createAgent()">＋ Создать агента с правилами</button>
+      <div id="a_toast" class="toast"></div>
+    </div>
+
+    <div class="card">
+      <h2>💳 Провести трату вручную</h2>
+      <label>Агент-плательщик</label>
+      <select id="p_agent"></select>
+      <div class="two">
+        <div><label>Сумма ($)</label><input id="p_amount" type="number" value="40" /></div>
+        <div><label>Категория</label><input id="p_category" value="cloud" /></div>
+      </div>
+      <label>Продавец / описание</label>
+      <input id="p_merchant" value="AWS credits" />
+      <label>Контрагент-агент (для сделки агент↔агент, опц.)</label>
+      <select id="p_counterparty"></select>
+      <button class="primary formbtn" onclick="pay()">→ Отправить платёж через Keyhole</button>
+      <div id="p_toast" class="toast"></div>
+    </div>
+  </div>
+
+  <!-- ============ СОСТОЯНИЕ ============ -->
+  <div class="grid">
+    <div class="card">
+      <h2>Агенты и кошельки</h2>
+      <div id="agents"><div class="empty">Пока пусто — создай агента или запусти демо</div></div>
+    </div>
+    <div class="card">
+      <h2>Ожидают подтверждения человека</h2>
+      <div id="approvals"><div class="empty">Нет ожидающих операций</div></div>
+    </div>
+    <div class="card full">
+      <h2>Леджер операций (в реальном времени)</h2>
+      <div id="ledger"><div class="empty">Операций ещё нет</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const api = (path, method='GET', body) =>
+    fetch('/api'+path, { method,
+      headers: {'Content-Type':'application/json', 'Authorization':'Bearer '+(window.KEYHOLE_KEY||'')},
+      body: body ? JSON.stringify(body) : undefined }).then(r => r.json());
+
+  async function runScenario() { await api('/scenario','POST'); refresh(); }
+  async function resetAll() { await api('/reset','POST'); refresh(); }
+  async function approveOne(id) { await api('/approve','POST',{approvalId:id}); refresh(); }
+
+  function money(n){ return '$'+Number(n).toLocaleString('en-US'); }
+  function cats(s){ return s.split(',').map(x=>x.trim().toLowerCase()).filter(Boolean); }
+  function toast(el, cls, msg){ const t=document.getElementById(el); t.className='toast '+cls; t.textContent=msg; }
+
+  // --- Создать агента: 2 запроса (агент + кошелёк с правилами) ---
+  async function createAgent() {
+    const name = document.getElementById('a_name').value || 'MyAgent';
+    const res = await api('/agents','POST',{ name, owner:'Ты (владелец)' });
+    if(!res.ok){ return toast('a_toast','bad','Ошибка создания агента'); }
+    await api('/wallets','POST',{
+      agentId: res.agent.id,
+      balance: Number(document.getElementById('a_balance').value),
+      rules: {
+        dailyLimit: Number(document.getElementById('a_limit').value),
+        perTxnApprovalThreshold: Number(document.getElementById('a_threshold').value),
+        allowedCategories: cats(document.getElementById('a_allow').value),
+        blockedCategories: cats(document.getElementById('a_block').value),
+      }
+    });
+    toast('a_toast','ok',`✅ Агент «${name}» создан · паспорт #${res.agent.fingerprint}`);
+    refresh();
+  }
+
+  // --- Провести трату ---
+  async function pay() {
+    const agentId = document.getElementById('p_agent').value;
+    if(!agentId){ return toast('p_toast','bad','Сначала создай агента'); }
+    const cp = document.getElementById('p_counterparty').value;
+    const r = await api('/pay','POST',{
+      agentId,
+      amount: Number(document.getElementById('p_amount').value),
+      category: document.getElementById('p_category').value.trim().toLowerCase(),
+      merchant: document.getElementById('p_merchant').value,
+      counterpartyAgentId: cp || undefined,
+    });
+    if(!r.ok){ return toast('p_toast','bad', r.error || 'Ошибка'); }
+    const d = r.decision;
+    if(d==='allow') toast('p_toast','ok','✅ ОДОБРЕНО · '+r.row.reason);
+    else if(d==='deny') toast('p_toast','bad','⛔ ОТКЛОНЕНО · '+r.row.reason);
+    else toast('p_toast','wait','⏳ ЖДЁТ ПОДТВЕРЖДЕНИЯ · '+r.row.reason);
+    refresh();
+  }
+
+  function fillSelect(id, agents, withEmpty) {
+    const sel = document.getElementById(id);
+    const prev = sel.value;
+    let html = withEmpty ? '<option value="">— нет —</option>' : '';
+    html += agents.map(a=>`<option value="${a.id}">${a.name}</option>`).join('');
+    sel.innerHTML = html;
+    if([...sel.options].some(o=>o.value===prev)) sel.value = prev;
+  }
+
+  function render(state) {
+    const wmap = {}; state.wallets.forEach(w => wmap[w.agentId]=w);
+    fillSelect('p_agent', state.agents, false);
+    fillSelect('p_counterparty', state.agents, true);
+
+    const ag = document.getElementById('agents');
+    ag.innerHTML = state.agents.length ? state.agents.map(a => {
+      const w = wmap[a.id];
+      return `<div class="agent">
+        <div>
+          <div class="name">${a.name} <span class="bal">${w?money(w.balance):''}</span></div>
+          <div class="meta">паспорт #${a.fingerprint} · ${a.owner}</div>
+        </div>
+        <div class="rep">доверие ${a.reputation}/100</div>
+      </div>`;
+    }).join('') : '<div class="empty">Пока пусто</div>';
+
+    const pend = state.approvals.filter(a => a.status==='pending');
+    const ap = document.getElementById('approvals');
+    ap.innerHTML = pend.length ? pend.map(a => `
+      <div class="row pending">
+        <div class="dot"></div>
+        <div><b>${money(a.charge.amount)}</b> · ${a.charge.category}
+          <div class="reason">${a.reason}</div></div>
+        <button class="approve-btn" onclick="approveOne('${a.id}')">Подтвердить</button>
+      </div>`).join('') : '<div class="empty">Нет ожидающих операций</div>';
+
+    const lg = document.getElementById('ledger');
+    lg.innerHTML = state.ledger.length ? state.ledger.map(t => `
+      <div class="row ${t.status}">
+        <div class="dot"></div>
+        <div class="amt">${money(t.amount)}</div>
+        <div>
+          <div>${t.category} · ${t.merchant}${t.counterpartyName ? ' 🤝 '+t.counterpartyName : ''}</div>
+          <div class="reason">${t.reason}</div>
+        </div>
+        <span class="tag">${t.status}</span>
+      </div>`).join('') : '<div class="empty">Операций ещё нет</div>';
+  }
+
+  async function refresh(){ render(await api('/state')); }
+  refresh();
+  setInterval(refresh, 2500);
+</script>
+</body>
+</html>
