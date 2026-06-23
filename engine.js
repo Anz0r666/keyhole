@@ -9,6 +9,7 @@ const crypto = require('crypto');
 const { db, nextId, persist } = require('./store');
 const { evaluate } = require('./policy');
 const { getRails } = require('./rails');
+const rep = require('./reputation');
 
 // Каноническое сообщение операции — именно его подписывает агент
 function canonical(charge) {
@@ -79,7 +80,7 @@ async function processPay({ agentId, amount, category, merchant, counterpartyAge
   // === Ворота 2: ПРАВИЛА ====================================================
   const verdict = evaluate(wallet, charge);
   if (verdict.decision === 'deny') {
-    agent.reputation = Math.max(0, agent.reputation - 1);
+    rep.recordDenied(agentId);
     const row = record({ ...charge, status: 'denied', stage: 'policy',
       reason: verdict.reason, rule: verdict.rule, agentName: agent.name });
     persist();
@@ -130,14 +131,13 @@ async function processPay({ agentId, amount, category, merchant, counterpartyAge
 
   // === Списание + зачисление контрагенту ===================================
   if (counterpartyAgentId) {
-    const other = db.agents[counterpartyAgentId];
     const otherWallet = db.wallets[counterpartyAgentId];
     if (otherWallet) otherWallet.balance += charge.amount;
-    other.reputation = Math.min(100, other.reputation + 1);
   }
   wallet.balance -= charge.amount;
   wallet.spentToday += charge.amount;
-  agent.reputation = Math.min(100, agent.reputation + 1);
+  // Репутационный граф: успешная операция наращивает историю обоих агентов.
+  rep.recordApproved(charge);
 
   const row = record({ ...charge, status: 'approved', stage: 'settled',
     reason: 'Оплата проведена', agentName: agent.name, rails: rails.name, railsRef,
@@ -156,4 +156,17 @@ async function approve(approvalId) {
   return processPay({ ...ap.charge, autoApprove: true });
 }
 
-module.exports = { processPay, approve, signCharge, verifyCharge };
+// Разрешение спора: человек помечает проведённую операцию как недобросовестную.
+// Бьёт по репутации агента-плательщика (один спор стоит дорого — см. reputation.js).
+function dispute(txnId) {
+  const row = db.ledger.find((r) => r.id === txnId);
+  if (!row) return { ok: false, error: 'Операция не найдена' };
+  if (row.status !== 'approved') return { ok: false, error: 'Спорить можно только по проведённой операции' };
+  if (row.disputed) return { ok: false, error: 'По этой операции уже открыт спор' };
+  if (!rep.recordDispute(row.agentId)) return { ok: false, error: 'Агент не найден' };
+  row.disputed = true;
+  persist();
+  return { ok: true, txnId, agentId: row.agentId, reputation: db.agents[row.agentId].reputation };
+}
+
+module.exports = { processPay, approve, dispute, signCharge, verifyCharge };

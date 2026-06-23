@@ -77,6 +77,17 @@
   .formbtn { width: 100%; margin-top: 14px; }
   .toast { font-size: 12px; margin-top: 10px; min-height: 16px; }
   .toast.ok { color: var(--ok); } .toast.bad { color: var(--deny); } .toast.wait { color: var(--wait); }
+  /* Репутационный граф */
+  .graphwrap { width: 100%; }
+  .graph-svg { width: 100%; height: 380px; display: block; }
+  .graph-svg .edge { stroke: var(--accent); stroke-opacity: .35; }
+  .graph-svg .node { stroke: rgba(255,255,255,.25); stroke-width: 1.5; }
+  .graph-svg .nlabel { fill: var(--text); font-size: 12px; font-weight: 600; text-anchor: middle; }
+  .graph-svg .nrep { fill: var(--muted); font-size: 10px; text-anchor: middle; }
+  .glegend { display: flex; gap: 16px; margin-top: 10px; font-size: 11px; color: var(--muted); flex-wrap: wrap; }
+  .glegend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+  .dispute-btn { background: rgba(255,107,138,.15); color: var(--deny); border: 1px solid rgba(255,107,138,.4);
+    padding: 3px 9px; font-size: 11px; border-radius: 7px; margin-left: 10px; align-self: center; }
 </style>
 </head>
 <body>
@@ -146,6 +157,18 @@
       <div id="approvals"><div class="empty">Нет ожидающих операций</div></div>
     </div>
     <div class="card full">
+      <h2>🕸️ Репутационный граф (наш «ров»)</h2>
+      <div class="graphwrap">
+        <svg id="graph" class="graph-svg" viewBox="0 0 800 380" preserveAspectRatio="xMidYMid meet"></svg>
+      </div>
+      <div class="glegend">
+        <span><i style="background:#3ddc97"></i>высокое доверие (70+)</span>
+        <span><i style="background:#8b7cff"></i>среднее (40–69)</span>
+        <span><i style="background:#ff6b8a"></i>низкое (&lt;40)</span>
+        <span>Размер узла = репутация · линия = была сделка между агентами</span>
+      </div>
+    </div>
+    <div class="card full">
       <h2>Леджер операций (в реальном времени)</h2>
       <div id="ledger"><div class="empty">Операций ещё нет</div></div>
     </div>
@@ -161,6 +184,10 @@
   async function runScenario() { await api('/scenario','POST'); refresh(); }
   async function resetAll() { await api('/reset','POST'); refresh(); }
   async function approveOne(id) { await api('/approve','POST',{approvalId:id}); refresh(); }
+  async function disputeOne(txnId) {
+    if(!confirm('Открыть спор по этой операции? Репутация агента упадёт.')) return;
+    await api('/dispute','POST',{txnId}); refresh();
+  }
 
   function money(n){ return '$'+Number(n).toLocaleString('en-US'); }
   function cats(s){ return s.split(',').map(x=>x.trim().toLowerCase()).filter(Boolean); }
@@ -248,10 +275,50 @@
         <div class="amt">${money(t.amount)}</div>
         <div>
           <div>${t.category} · ${t.merchant}${t.counterpartyName ? ' 🤝 '+t.counterpartyName : ''}</div>
-          <div class="reason">${t.reason}</div>
+          <div class="reason">${t.reason}${t.disputed ? ' · ⚖️ спор открыт' : ''}</div>
         </div>
         <span class="tag">${t.status}</span>
+        ${t.status==='approved' && !t.disputed ? `<button class="dispute-btn" onclick="disputeOne('${t.id}')">⚖️ спор</button>` : ''}
       </div>`).join('') : '<div class="empty">Операций ещё нет</div>';
+
+    renderGraph();
+  }
+
+  // --- Репутационный граф: чистый SVG, круговая раскладка, без зависимостей ---
+  function repColor(r){ return r >= 70 ? '#3ddc97' : r >= 40 ? '#8b7cff' : '#ff6b8a'; }
+  async function renderGraph() {
+    const g = await api('/graph');
+    const svg = document.getElementById('graph');
+    const W = 800, H = 380, cx = W/2, cy = H/2, R = 130;
+    const nodes = g.nodes || [];
+    if (!nodes.length) {
+      svg.innerHTML = `<text x="${cx}" y="${cy}" class="nrep" style="font-size:13px">Граф пуст — создай агентов или запусти демо</text>`;
+      return;
+    }
+    // Позиции по окружности
+    const pos = {};
+    nodes.forEach((n, i) => {
+      const ang = (i / nodes.length) * Math.PI * 2 - Math.PI/2;
+      pos[n.id] = { x: cx + R * Math.cos(ang), y: cy + R * Math.sin(ang) };
+    });
+    let svgEls = '';
+    // Рёбра (рисуем первыми, чтобы были под узлами)
+    (g.edges || []).forEach(e => {
+      const a = pos[e.from], b = pos[e.to];
+      if (!a || !b) return;
+      svgEls += `<line class="edge" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke-width="${Math.min(5, 1 + e.count)}" />`;
+    });
+    // Узлы
+    nodes.forEach(n => {
+      const p = pos[n.id];
+      const radius = 16 + (n.reputation/100) * 14;
+      const col = repColor(n.reputation);
+      svgEls += `<circle class="node" cx="${p.x}" cy="${p.y}" r="${radius}" fill="${col}" fill-opacity="0.85" />`;
+      svgEls += `<text class="nlabel" x="${p.x}" y="${p.y - radius - 8}">${n.name}</text>`;
+      svgEls += `<text class="nrep" x="${p.x}" y="${p.y + 4}">${n.reputation}</text>`;
+      if (n.disputed) svgEls += `<text class="nrep" x="${p.x}" y="${p.y + radius + 14}" style="fill:#ff6b8a">⚖️ ${n.disputed}</text>`;
+    });
+    svg.innerHTML = svgEls;
   }
 
   async function refresh(){ render(await api('/state')); }

@@ -88,6 +88,7 @@ function createAgent(name, owner) {
     publicKeyPem,
     privateKeyPem, // ⚠️ в проде ключ так не хранится — это тестовый режим
     reputation: 50,
+    stats: { approved: 0, denied: 0, disputed: 0, volume: 0, counterparties: {}, firstAt: null, lastAt: null },
     createdAt: new Date().toISOString(),
   };
   persist();
@@ -116,6 +117,7 @@ function snapshot() {
     agents: Object.values(db.agents).map((a) => ({
       id: a.id, name: a.name, owner: a.owner,
       fingerprint: a.fingerprint, reputation: a.reputation,
+      stats: a.stats || { approved: 0, denied: 0, disputed: 0, volume: 0, counterparties: {} },
     })),
     wallets: Object.values(db.wallets),
     ledger: db.ledger,

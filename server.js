@@ -10,8 +10,9 @@ const fs = require('fs');
 const path = require('path');
 const store = require('./store');
 const { snapshot, reset, createAgent, setWallet, load, ensureApiKey, db } = store;
-const { processPay, approve } = require('./engine');
+const { processPay, approve, dispute } = require('./engine');
 const { getRails } = require('./rails');
+const rep = require('./reputation');
 const V = require('./validate');
 const sec = require('./security');
 
@@ -19,7 +20,7 @@ const PORT = process.env.PORT || 4178;
 
 // Мутирующие эндпоинты — только с валидным API-ключом
 const PROTECTED = new Set([
-  '/api/scenario', '/api/reset', '/api/agents', '/api/wallets', '/api/pay', '/api/approve',
+  '/api/scenario', '/api/reset', '/api/agents', '/api/wallets', '/api/pay', '/api/approve', '/api/dispute',
 ]);
 
 function sendJSON(res, code, obj) {
@@ -113,6 +114,9 @@ async function handle(req, res) {
   if (p === '/api/state' && req.method === 'GET') {
     return sendJSON(res, 200, snapshot());
   }
+  if (p === '/api/graph' && req.method === 'GET') {
+    return sendJSON(res, 200, rep.graph());
+  }
 
   // 5) Аутентификация для мутирующих эндпоинтов
   if (PROTECTED.has(p)) {
@@ -172,6 +176,14 @@ async function handle(req, res) {
       if (!parsed.ok) return sendJSON(res, parsed.tooLarge ? 413 : 400, { error: parsed.tooLarge ? 'Тело запроса слишком большое' : 'Некорректный JSON' });
       const approvalId = V.id(parsed.body.approvalId, { field: 'approvalId' });
       const r = await approve(approvalId);
+      return sendJSON(res, r.ok ? 200 : 400, r);
+    }
+
+    if (p === '/api/dispute' && req.method === 'POST') {
+      const parsed = await sec.readBodyLimited(req);
+      if (!parsed.ok) return sendJSON(res, parsed.tooLarge ? 413 : 400, { error: parsed.tooLarge ? 'Тело запроса слишком большое' : 'Некорректный JSON' });
+      const txnId = V.id(parsed.body.txnId, { field: 'txnId' });
+      const r = dispute(txnId);
       return sendJSON(res, r.ok ? 200 : 400, r);
     }
   } catch (err) {
