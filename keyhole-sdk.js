@@ -33,6 +33,13 @@ class KeyholeAgent {
     const w = st.wallets.find((x) => x.agentId === this.id);
     return w ? w.balance : 0;
   }
+
+  /** Текущий балл доверия агента (0..100) из репутационного графа */
+  async reputation() {
+    const st = await this._client._get('/api/state');
+    const a = st.agents.find((x) => x.id === this.id);
+    return a ? a.reputation : 50;
+  }
 }
 
 class Keyhole {
@@ -56,6 +63,16 @@ class Keyhole {
   async _get(path) {
     const res = await fetch(this.baseUrl + path, { headers: this._headers() });
     return res.json();
+  }
+
+  /** Репутационный граф сети: узлы (агенты + балл) и рёбра (сделки) */
+  async graph() {
+    return this._get('/api/graph');
+  }
+
+  /** Открыть спор по проведённой операции — бьёт по репутации агента-плательщика */
+  async dispute(txnId) {
+    return this._post('/api/dispute', { txnId });
   }
 
   /**

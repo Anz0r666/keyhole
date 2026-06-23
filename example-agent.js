@@ -57,7 +57,9 @@ async function main() {
   }
 
   const bal = await agent.balance();
+  const rep = await agent.reputation();
   console.log(`\n  💰 Остаток бюджета агента: $${bal}`);
+  console.log(`  🕸️ Балл доверия агента (репутационный граф): ${rep}/100`);
   console.log('  🔑 Keyhole не дал агенту выйти за рамки. Деньги под контролем.\n');
 }
 
