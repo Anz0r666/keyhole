@@ -11,7 +11,7 @@
 // ============================================================================
 
 const store = require('../store');
-const { handle } = require('../server');
+const { handle } = require('../router');
 
 module.exports = async (req, res) => {
   await store.hydrate();

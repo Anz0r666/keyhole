@@ -2,9 +2,8 @@
   "name": "keyhole",
   "version": "0.1.0",
   "description": "Keyhole — платёжный + идентификационный слой с программируемыми правилами для автономных ИИ-агентов (ТЕСТОВЫЙ режим, без реальных денег)",
-  "main": "server.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "node local-server.js",
     "demo": "node demo.js",
     "test": "node --test"
   },

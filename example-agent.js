@@ -64,6 +64,6 @@ async function main() {
 }
 
 main().catch((e) => {
-  console.error('\n  ⚠️  Сервер не запущен? Сначала: node server.js');
+  console.error('\n  ⚠️  Сервер не запущен? Сначала: node local-server.js');
   console.error('     ' + e.message + '\n');
 });

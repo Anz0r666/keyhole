@@ -1,0 +1,11 @@
+# На Vercel точка входа — api/index.js → router.js. Локальный http-сервер и
+# вспомогательные файлы в бандл не нужны (а local-server.js с http.createServer
+# сбивал бы автодетект точки входа сборщика). Исключаем их из деплоя.
+local-server.js
+demo.js
+example-agent.js
+keyhole-sdk.js
+test/
+docs/
+data/
+*.md

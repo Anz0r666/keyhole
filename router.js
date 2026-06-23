@@ -1,22 +1,23 @@
 'use strict';
 // ============================================================================
-//  Keyhole · API-сервер + дашборд  (чистый Node, без зависимостей)
-//  Защита: валидация · API-ключи · rate limit · лимит тела · заголовки · устойчивость
-//  Запуск:  node server.js   →   http://localhost:4178
+//  Keyhole · Роутер (чистая логика обработки запросов, без http-сервера)
+//  Используется и локальным сервером (server.js), и serverless-точкой Vercel
+//  (api/index.js). Намеренно НЕ содержит http.createServer/listen — иначе
+//  сборщик Vercel принимает модуль за серверную точку входа.
+//  Защита: валидация · API-ключи · rate limit · лимит тела · заголовки.
 // ============================================================================
 
-const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const store = require('./store');
-const { snapshot, reset, createAgent, setWallet, load, ensureApiKey, db } = store;
+const { snapshot, reset, createAgent, setWallet, db } = store;
 const { processPay, approve, dispute } = require('./engine');
 const { getRails } = require('./rails');
 const rep = require('./reputation');
 const V = require('./validate');
 const sec = require('./security');
 
-const PORT = process.env.PORT || 4178;
+const PORT = process.env.PORT || 4178; // используется только как база для разбора URL
 
 // Мутирующие эндпоинты — только с валидным API-ключом
 const PROTECTED = new Set([
@@ -197,32 +198,4 @@ async function handle(req, res) {
   return sendJSON(res, 404, { error: 'not found' });
 }
 
-// --- Устойчивость: ни одно исключение не роняет сервер ----------------------
-const server = http.createServer((req, res) => {
-  handle(req, res).catch((err) => {
-    console.error('  ⚠️ Непойманная ошибка:', err && err.message);
-    try { sendJSON(res, 500, { error: 'Внутренняя ошибка сервера' }); } catch (_) { /* ответ уже отправлен */ }
-  });
-});
-
-process.on('uncaughtException', (err) => console.error('  ⚠️ uncaughtException:', err && err.message));
-process.on('unhandledRejection', (err) => console.error('  ⚠️ unhandledRejection:', err && (err.message || err)));
-
-// Локальный запуск (node server.js). На Vercel этот блок не выполняется —
-// там точка входа api/index.js сама делает hydrate → handle → flush.
-if (require.main === module) {
-  const restored = load();
-  const apiKey = ensureApiKey();
-  server.listen(PORT, () => {
-    console.log(`\n  🔑 Keyhole [ТЕСТОВЫЙ режим] запущен`);
-    console.log(`  → Дашборд:     http://localhost:${PORT}`);
-    console.log(`  → Презентация: http://localhost:${PORT}/deck`);
-    console.log(`  → Health:      http://localhost:${PORT}/health`);
-    console.log(`  → Рельсы:      ${getRails().name}`);
-    console.log(`  → Состояние:   ${restored ? 'восстановлено с диска' : 'чистое'}`);
-    console.log(`  → API-ключ:    ${apiKey}`);
-    console.log(`  Защита: валидация · auth · rate-limit · заголовки · устойчивость.\n`);
-  });
-}
-
-module.exports = { handle, runScenario, server };
+module.exports = { handle, runScenario, sendJSON };
